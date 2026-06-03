@@ -1,31 +1,28 @@
-import { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
-import { Request, Response } from "express";
-import { verifyAuth } from "./auth";
-import { db } from "../db";
+import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
+import type { User } from "../../drizzle/schema";
+import { sdk } from "./sdk";
 
-interface ContextOptions {
-  req?: Request;
-  res?: Response;
-}
+export type TrpcContext = {
+  req: CreateExpressContextOptions["req"];
+  res: CreateExpressContextOptions["res"];
+  user: User | null;
+};
 
-export async function createContext(opts: ContextOptions) {
-  const token = opts.req?.cookies?.["auth-token"];
-  let user = null;
+export async function createContext(
+  opts: CreateExpressContextOptions
+): Promise<TrpcContext> {
+  let user: User | null = null;
 
-  if (token) {
-    try {
-      user = await verifyAuth(token);
-    } catch (error) {
-      console.error("Auth verification failed:", error);
-    }
+  try {
+    user = await sdk.authenticateRequest(opts.req);
+  } catch (error) {
+    // Authentication is optional for public procedures.
+    user = null;
   }
 
   return {
-    user,
-    db,
     req: opts.req,
     res: opts.res,
+    user,
   };
 }
-
-export type Context = Awaited<ReturnType<typeof createContext>>;
